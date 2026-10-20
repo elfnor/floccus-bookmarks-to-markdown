@@ -93,7 +93,7 @@ export default class fbmPlugin extends Plugin {
         }
 
         // Delete old backups, keeping only the specified number of most recent ones
-        this.deleteOldBackups(backupFolderPath, keepCount);
+        await this.deleteOldBackups(backupFolderPath, keepCount);
 
         try {
             // Read the XBEL file
@@ -136,29 +136,24 @@ export default class fbmPlugin extends Plugin {
         
     }
 
-    deleteOldBackups(backupFolderPath: string, keepCount: number): void {
+    async deleteOldBackups(backupFolderPath: string, keepCount: number): Promise<void> {
         // Get all files in the backup folder
         const backupFolder = this.app.vault.getAbstractFileByPath(backupFolderPath) as TFolder;
         if (!backupFolder) {
             return;
         }
 
-        const backupFiles = backupFolder.children as TFile[];
-
-        // Sort the files by modification time in ascending order
-        backupFiles.sort((a, b) => {
-            const statA = a.stat;
-            const statB = b.stat;
-            return statA.mtime - statB.mtime;
-        });
+        const backupFiles = backupFolder.children
+            .filter((file): file is TFile => file instanceof TFile && !!file.stat)
+            .sort((a, b) => (a.stat.mtime ?? 0) - (b.stat.mtime ?? 0));
 
         // Delete files exceeding the keep count
-        const filesToDelete = backupFiles.length - keepCount+1;
+        const filesToDelete = Math.max(0, backupFiles.length - keepCount);
         if (filesToDelete > 0) {
             const filesToDeleteList = backupFiles.slice(0, filesToDelete);
-            filesToDeleteList.forEach(async (file) => {
+            for (const file of filesToDeleteList) {
                 await this.app.vault.trash(file, false);
-            });
+            }
         }
     }
 
